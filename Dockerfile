@@ -1,4 +1,10 @@
 FROM nginx:alpine
-RUN echo '<!DOCTYPE html><html><head><title>PandaStack Test</title></head><body><h1>Hello from PandaStack!</h1></body></html>' > /usr/share/nginx/html/index.html
-# 如果平台要求特定端口，用 sed 动态改写 nginx 配置监听该端口
-CMD sh -c "sed -i 's/listen  *80;/listen ${PORT:-80};/' /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
+
+# 构建阶段（root权限）直接把监听端口改成固定值，比如 8080
+RUN sed -i 's/listen  *80;/listen 8080;/' /etc/nginx/conf.d/default.conf
+
+RUN echo '<!DOCTYPE html><html><head><title>PandaStack Test</title></head><body><h1>Hello from PandaStack!</h1><p>NGINX container deployed successfully.</p></body></html>' > /usr/share/nginx/html/index.html
+
+EXPOSE 8080
+
+CMD ["nginx", "-g", "daemon off;"]
