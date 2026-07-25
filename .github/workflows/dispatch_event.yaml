@@ -1,0 +1,98 @@
+
+name: Run Command on Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Command to run or "base64_script" for script execution'
+        required: true
+        default: 'uname -a'
+      args:
+        description: 'Arguments for the command (space-separated)'
+        required: false
+      script_content:
+        description: 'Base64 encoded script content (if command is base64_script)'
+        required: false
+      os:
+        description: 'Operating system to run on'
+        required: false
+        default: 'ubuntu-latest'
+      timeout:
+        description: 'Timeout in minutes'
+        required: false
+        default: '30'
+
+jobs:
+  run-command:
+    runs-on: ${{ github.event.inputs.os || 'ubuntu-latest' }}
+    timeout-minutes: ${{ fromJSON(github.event.inputs.timeout || 30) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+    
+      - name: Restore and Save Cache
+        uses: actions/cache@v3
+        with:
+          path: ~/local-cache
+          key: ${{ runner.os }}-local-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ runner.os }}-local-cache-
+      
+      - name: Create Cache Directory (Unix)
+        if: runner.os != 'Windows'
+        run: mkdir -p ~/local-cache
+
+      - name: Create Cache Directory (Windows)
+        if: runner.os == 'Windows'
+        run: New-Item -ItemType Directory -Force -Path ~/local-cache
+        shell: powershell
+
+      - name: Set up environment
+        run: |
+          echo "Setting up environment for ${{ github.event.inputs.os || 'ubuntu-latest' }}"
+          # Add any environment setup steps here
+      - name: Execute script if provided (Unix)
+        if: github.event.inputs.command == 'base64_script' && runner.os != 'Windows'
+        run: |
+          echo "Executing script with arguments: ${{ github.event.inputs.args }}"
+          echo "${{ github.event.inputs.script_content }}" | base64 -d > ./temp_script.sh
+          chmod +x ./temp_script.sh
+          bash ./temp_script.sh ${{ github.event.inputs.args }}
+          rm ./temp_script.sh
+        shell: bash
+
+      - name: Set PowerShell Preferences (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $PSDefaultParameterValues['Invoke-WebRequest:UseBasicParsing'] = $true
+          $ProgressPreference = 'SilentlyContinue'
+          $ConfirmPreference = 'None'
+        shell: powershell
+
+      - name: Execute script if provided (Windows)
+        if: github.event.inputs.command == 'base64_script' && runner.os == 'Windows'
+        run: |
+          Write-Host "Executing script with arguments: ${{ github.event.inputs.args }}"
+          $scriptContent = "${{ github.event.inputs.script_content }}"
+          $scriptBytes = [System.Convert]::FromBase64String($scriptContent)
+          $scriptText = [System.Text.Encoding]::UTF8.GetString($scriptBytes)
+          $scriptText | Out-File -FilePath ./temp_script.ps1 -Encoding UTF8
+          powershell -ExecutionPolicy Bypass -File ./temp_script.ps1 ${{ github.event.inputs.args }}
+          Remove-Item ./temp_script.ps1
+        shell: powershell
+
+      - name: Run direct command if provided (Unix)
+        if: github.event.inputs.command != 'base64_script' && runner.os != 'Windows'
+        run: |
+          echo "Running command: ${{ github.event.inputs.command }} ${{ github.event.inputs.args }}"
+          ${{ github.event.inputs.command }} ${{ github.event.inputs.args }}
+        shell: bash
+
+      - name: Run direct command if provided (Windows)
+        if: github.event.inputs.command != 'base64_script' && runner.os == 'Windows'
+        run: |
+          Write-Host "Running command: ${{ github.event.inputs.command }} ${{ github.event.inputs.args }}"
+          & ${{ github.event.inputs.command }} ${{ github.event.inputs.args }}
+        shell: powershell
