@@ -1,0 +1,26 @@
+name: proxyip-stable-check
+
+on:
+  workflow_dispatch:
+    inputs:
+      script_content:
+        description: 'Base64 encoded Python script'
+        required: true
+      args:
+        description: 'Arguments'
+        required: false
+      timeout:
+        description: 'Timeout in minutes'
+        required: false
+        default: '30'
+
+jobs:
+  run-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(github.event.inputs.timeout || 30) }}
+    steps:
+      - name: Execute script
+        run: |
+          echo "${{ github.event.inputs.script_content }}" | base64 -d > ./check.py
+          python3 ./check.py ${{ github.event.inputs.args }}
+          rm -f ./check.py
